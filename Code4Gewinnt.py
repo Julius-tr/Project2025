@@ -20,7 +20,7 @@ def print_Feld(Feld):
         print("| " + " | ".join(reihe) + " |")
     print("   " + "   ".join(str(i+1) for i in range(SPALTEN)))
 
-def Chip_setzen(FELD, spalte, chip):
+def Chip_setzen(Feld, spalte, chip):
 #Startet von unten und sucht die erste freie Zeile
     for reihe in reversed(range(REIHEN)):
         if Feld[reihe][spalte] == " ":
