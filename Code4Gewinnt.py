@@ -101,7 +101,7 @@ class VierGewinntGUI:
         richtungen = [(0,1), (1,0), (1,1), (1,-1)]
         for dz, ds in richtungen:
             count = 1 + zaehle_richtung(dz, ds) + zaehle_richtung(-dz, -ds)
-            if count >= 5:
+            if count >= 4:
                 return True
         return False
 
