@@ -16,6 +16,7 @@ ZELL_GROESSE = 60  # Pixelgröße der Zellen
 
 # Farben für Spieler
 FARBEN = {"X": "#f13914", "O": "#e6e51d", " ": "#f1f1f1"}
+NAMEN = {"X": "Rot", "O": "Gelb"}
 
 class VierGewinntGUI:
     def __init__(self, root):
@@ -27,15 +28,18 @@ class VierGewinntGUI:
 
         # Spieler starten mit "X"
         self.spieler = "X"
+        self.spiel_aktiv = True
 
         # Canvas erstellen
         self.canvas = tk.Canvas(root, width=SPALTEN * ZELL_GROESSE, height=REIHEN * ZELL_GROESSE, bg="#1207c1")
         self.canvas.grid(row=0, column=0, columnspan=SPALTEN)
 
         # Buttons zum Steine setzen
+        self.buttons = []
         for spalte in range(SPALTEN):
             btn = tk.Button(root, text=str(spalte + 1), width=4, command=lambda s=spalte: self.chip_setzen(s))
             btn.grid(row=1, column=spalte, padx=2, pady=4)
+            self.buttons.append(btn)
 
         self.zeichne_feld()
 
@@ -51,16 +55,31 @@ class VierGewinntGUI:
                 self.canvas.create_oval(x1, y1, x2, y2, fill=farbe, outline="black")
 
     def chip_setzen(self, spalte):
+        if not self.spiel_aktiv:
+            return
+
         for zeile in reversed(range(REIHEN)):
             if self.feld[zeile][spalte] == " ":
                 self.feld[zeile][spalte] = self.spieler
                 self.zeichne_feld()
-                if self.spielfeld_voll():
+                if self.pruefe_gewinner(zeile, spalte):
                     self.canvas.create_text(
-                        (SPALTEN * ZELL_GROESSE) // 2, 
+                        (SPALTEN * ZELL_GROESSE) // 2,
                         (REIHEN * ZELL_GROESSE) // 2,
-                        text="Unentschieden!", font=("Arial", 24), fill="white"
+                        text=f"Spieler {NAMEN[self.spieler]} gewinnt!",
+                        font=("Arial", 24), fill="black"
                     )
+                    self.spiel_aktiv = False
+                    return
+                elif self.spielfeld_voll():
+                    self.canvas.create_text(
+                        (SPALTEN * ZELL_GROESSE) // 2,
+                        (REIHEN * ZELL_GROESSE) // 2,
+                        text="Unentschieden!",
+                        font=("Arial", 24), fill="white"
+                    )
+                    self.spiel_aktiv = False
+                    return
                 else:
                     self.spieler = "O" if self.spieler == "X" else "X"
                 return
@@ -68,6 +87,23 @@ class VierGewinntGUI:
 
     def spielfeld_voll(self):
         return all(self.feld[0][spalte] != " " for spalte in range(SPALTEN))
+
+    def pruefe_gewinner(self, zeile, spalte):
+        def zaehle_richtung(dz, ds):
+            count = 0
+            z, s = zeile + dz, spalte + ds
+            while 0 <= z < REIHEN and 0 <= s < SPALTEN and self.feld[z][s] == self.spieler:
+                count += 1
+                z += dz
+                s += ds
+            return count
+
+        richtungen = [(0,1), (1,0), (1,1), (1,-1)]
+        for dz, ds in richtungen:
+            count = 1 + zaehle_richtung(dz, ds) + zaehle_richtung(-dz, -ds)
+            if count >= 5:
+                return True
+        return False
 
 # Fenster starten
 fenster = tk.Tk()
