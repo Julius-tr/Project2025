@@ -11,8 +11,8 @@ import tkinter as tk
 
 # Konstanten für das Spielfeld
 REIHEN = 6
-SPALTEN = 7
-ZELL_GROESSE = 60  # Pixelgröße der Zellen
+SPALTEN =7
+ZELL_GROESSE = 60 # Pixelgröße der Zellen
 
 # Farben für Spieler
 FARBEN = {"X": "#f13914", "O": "#e6e51d", " ": "#f1f1f1"}
@@ -67,7 +67,7 @@ class VierGewinntGUI:
                         (SPALTEN * ZELL_GROESSE) // 2,
                         (REIHEN * ZELL_GROESSE) // 2,
                         text=f"Spieler {NAMEN[self.spieler]} gewinnt!",
-                        font=("Arial", 24), fill="black"
+                        font=("Arial", 24), fill="green"
                     )
                     self.spiel_aktiv = False
                     return
@@ -104,8 +104,3 @@ class VierGewinntGUI:
             if count >= 4:
                 return True
         return False
-
-# Fenster starten
-fenster = tk.Tk()
-spiel = VierGewinntGUI(fenster)
-fenster.mainloop()
