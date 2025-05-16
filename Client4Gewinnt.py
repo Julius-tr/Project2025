@@ -1,7 +1,7 @@
 import socket
 import threading
 import tkinter as tk
-from Spielfeld_Probe import VierGewinntGUI
+from Code4Gewinnt import VierGewinntGUI
 
 SERVER_IP = input("Gib die IP-Adresse des Servers ein: ")  # ÄNDERN: IP des Servers
 PORT = 12345
