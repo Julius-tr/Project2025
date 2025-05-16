@@ -1,5 +1,5 @@
 '''
-Dies wird/ist ein 4 Gewinnt Multiplayer per sockets code
+Dies ist ein Code für das Spielfeld von 4 Gewinnt, welches mit den Codes Client4Gewinnt und Server4Gewinnt per sockets spielbar ist.
 Creators:
     Julia
     Matteo
