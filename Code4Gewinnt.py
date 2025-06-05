@@ -36,13 +36,13 @@ class VierGewinntGUI:
 
         # Canvas erstellen
         self.canvas = tk.Canvas(root, width=SPALTEN * ZELL_GROESSE, height=REIHEN * ZELL_GROESSE, bg="#1207c1")
-        self.canvas.grid(row=0, column=0, columnspan=SPALTEN)
+        self.canvas.grid(row=1, column=0, columnspan=SPALTEN)
 
         # Buttons zum Steine setzen
         self.buttons = []
         for spalte in range(SPALTEN):
             btn = tk.Button(root, text=str(spalte + 1), width=4, command=lambda s=spalte: self.chip_setzen(s))
-            btn.grid(row=1, column=spalte, padx=2, pady=4)
+            btn.grid(row=0, column=spalte, padx=2, pady=4)
             self.buttons.append(btn)
 
         self.zeichne_feld()
@@ -100,7 +100,7 @@ class VierGewinntGUI:
                     self.canvas.create_text(
                         (SPALTEN * ZELL_GROESSE) // 2,
                         (REIHEN * ZELL_GROESSE) // 2,
-                        text=f"Spieler {NAMEN[self.spieler]}\n gewinnt!",
+                        text=f"Spieler {NAMEN[self.spieler]} gewinnt!",
                         font=("Arial", 32, "bold"), fill="green"
                     )
                     self.spiel_aktiv = False
@@ -140,4 +140,3 @@ class VierGewinntGUI:
             if count >= 4:
                 return True
         return False
-
