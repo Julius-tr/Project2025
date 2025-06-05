@@ -7,100 +7,70 @@ Prüfstelle:
     HTL-Anichstrasse
 '''
 
+import socket
+import threading
 import tkinter as tk
+from Code4Gewinnt import VierGewinntGUI
 
-# Konstanten für das Spielfeld
-REIHEN = 6
-SPALTEN =7
-ZELL_GROESSE = 60 # Pixelgröße der Zellen
+SERVER_IP = input("Gib die IP-Adresse des Servers ein: ")  # ÄNDERN: IP des Servers
+PORT = 12345
 
-# Farben für Spieler
-FARBEN = {"X": "#f13914", "O": "#e6e51d", " ": "#f1f1f1"}
-NAMEN = {"X": "Rot", "O": "Gelb"}
+class NetzwerkSpiel(VierGewinntGUI):
+    def __init__(self, root, verbindung, ist_server=False):
+        super().__init__(root)
+        self.verbindung = verbindung
+        self.ist_server = ist_server
+        self.root.title("4 Gewinnt – " + ("Server (Rot)" if ist_server else "Client (Gelb)"))
+        self.spieler = "O" if ist_server else "X"
+        self.dran = ist_server  # Server beginnt
 
-class VierGewinntGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("4 Gewinnt – Julia & Matteo")
+        threading.Thread(target=self.empfange_nachrichten, daemon=True).start()
 
-        # Spielfeld-Datenstruktur
-        self.feld = [[" " for _ in range(SPALTEN)] for _ in range(REIHEN)]
-
-        # Spieler starten mit "X"
-        self.spieler = "X"
-        self.spiel_aktiv = True
-
-        # Canvas erstellen
-        self.canvas = tk.Canvas(root, width=SPALTEN * ZELL_GROESSE, height=REIHEN * ZELL_GROESSE, bg="#1207c1")
-        self.canvas.grid(row=0, column=0, columnspan=SPALTEN)
-
-        # Buttons zum Steine setzen
-        self.buttons = []
-        for spalte in range(SPALTEN):
-            btn = tk.Button(root, text=str(spalte + 1), width=4, command=lambda s=spalte: self.chip_setzen(s))
-            btn.grid(row=1, column=spalte, padx=2, pady=4)
-            self.buttons.append(btn)
-
-        self.zeichne_feld()
-
-    def zeichne_feld(self):
-        self.canvas.delete("all")
-        for zeile in range(REIHEN):
-            for spalte in range(SPALTEN):
-                x1 = spalte * ZELL_GROESSE + 5
-                y1 = zeile * ZELL_GROESSE + 5
-                x2 = x1 + ZELL_GROESSE - 10
-                y2 = y1 + ZELL_GROESSE - 10
-                farbe = FARBEN[self.feld[zeile][spalte]]
-                self.canvas.create_oval(x1, y1, x2, y2, fill=farbe, outline="black")
+        # Button anpassen
+        self.reset_button.config(command=self.sende_neustart)
 
     def chip_setzen(self, spalte):
-        if not self.spiel_aktiv:
+        if not self.dran or not self.spiel_aktiv:
             return
+        if self.feld[0][spalte] != " ":
+            return
+        super().chip_setzen(spalte)
+        self.verbindung.sendall(str(spalte).encode())
+        self.dran = False
 
-        for zeile in reversed(range(REIHEN)):
-            if self.feld[zeile][spalte] == " ":
-                self.feld[zeile][spalte] = self.spieler
-                self.zeichne_feld()
-                if self.pruefe_gewinner(zeile, spalte):
-                    self.canvas.create_text(
-                        (SPALTEN * ZELL_GROESSE) // 2,
-                        (REIHEN * ZELL_GROESSE) // 2,
-                        text=f"Spieler {NAMEN[self.spieler]} gewinnt!",
-                        font=("Arial", 24), fill="green"
-                    )
-                    self.spiel_aktiv = False
-                    return
-                elif self.spielfeld_voll():
-                    self.canvas.create_text(
-                        (SPALTEN * ZELL_GROESSE) // 2,
-                        (REIHEN * ZELL_GROESSE) // 2,
-                        text="Unentschieden!",
-                        font=("Arial", 24), fill="white"
-                    )
-                    self.spiel_aktiv = False
-                    return
+    def empfange_nachrichten(self):
+        while True:
+            try:
+                daten = self.verbindung.recv(1024)
+                if not daten:
+                    break
+                nachricht = daten.decode()
+                if nachricht == "RESET":
+                    self.root.after(0, self.spiel_neustarten)
                 else:
-                    self.spieler = "O" if self.spieler == "X" else "X"
-                return
-        print("Spalte voll!")  # Optional: Fehleranzeige für volle Spalte
+                    spalte = int(nachricht)
+                    self.root.after(0, lambda: self.netzwerk_zug(spalte))
+            except:
+                break
 
-    def spielfeld_voll(self):
-        return all(self.feld[0][spalte] != " " for spalte in range(SPALTEN))
+    def netzwerk_zug(self, spalte):
+        super().chip_setzen(spalte)
+        self.dran = True
 
-    def pruefe_gewinner(self, zeile, spalte):
-        def zaehle_richtung(dz, ds):
-            count = 0
-            z, s = zeile + dz, spalte + ds
-            while 0 <= z < REIHEN and 0 <= s < SPALTEN and self.feld[z][s] == self.spieler:
-                count += 1
-                z += dz
-                s += ds
-            return count
+    def sende_neustart(self):
+        self.spiel_neustarten()
+        try:
+            self.verbindung.sendall("RESET".encode())
+        except:
+            pass
 
-        richtungen = [(0,1), (1,0), (1,1), (1,-1)]
-        for dz, ds in richtungen:
-            count = 1 + zaehle_richtung(dz, ds) + zaehle_richtung(-dz, -ds)
-            if count >= 4:
-                return True
-        return False
+
+#Verbindung zum Server
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client_socket.connect((SERVER_IP, PORT))
+print("Verbunden mit Server")
+
+#GUI starten
+fenster = tk.Tk()
+spiel = NetzwerkSpiel(fenster, client_socket, ist_server=False)
+fenster.mainloop()
