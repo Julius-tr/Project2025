@@ -141,8 +141,3 @@ class VierGewinntGUI:
                 return True
         return False
 
-
-#GUI starten
-fenster = tk.Tk()
-spiel = NetzwerkSpiel(fenster, client_socket, ist_server=False)
-fenster.mainloop()
