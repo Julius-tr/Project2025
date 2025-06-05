@@ -43,10 +43,23 @@ class VierGewinntGUI:
         for spalte in range(SPALTEN):
             btn = tk.Button(root, text=str(spalte + 1), width=4, command=lambda s=spalte: self.chip_setzen(s))
             btn.grid(row=0, column=spalte, padx=2, pady=4)
+
+            # Hover-Effekt: Text wird zu "O" (Chip), danach wieder zur Zahl
+            btn.bind("<Enter>", lambda e, s=spalte: self.hover_begin(e, s))
+            btn.bind("<Leave>", lambda e, s=spalte: self.hover_ende(e, s))
+
             self.buttons.append(btn)
 
         self.zeichne_feld()
+        
+    def hover_begin(self, event, spalte):
+        if self.spiel_aktiv and self.feld[0][spalte] == " ":
+            event.widget.config(text="O", fg="black", font=("Arial", 10, "bold"), bg=FARBEN[self.spieler])
 
+    def hover_ende(self, event, spalte):
+        if self.spiel_aktiv:
+            event.widget.config(text=str(spalte + 1), fg="black", font=("Arial", 10), bg="SystemButtonFace")
+            
     def zeige_status_text(self, text, farbe="black"):
         # Vorherige Textanzeige löschen
         if self.status_text_id:
