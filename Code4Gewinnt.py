@@ -100,7 +100,7 @@ class VierGewinntGUI:
                     self.canvas.create_text(
                         (SPALTEN * ZELL_GROESSE) // 2,
                         (REIHEN * ZELL_GROESSE) // 2,
-                        text=f"Spieler {NAMEN[self.spieler]} gewinnt!",
+                        text=f"Spieler {NAMEN[self.spieler]}\n gewinnt!",
                         font=("Arial", 32, "bold"), fill="green"
                     )
                     self.spiel_aktiv = False
