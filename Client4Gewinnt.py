@@ -2,9 +2,31 @@ import socket
 import threading
 import tkinter as tk
 from Code4Gewinnt import VierGewinntGUI
+import os
 
 SERVER_IP = input("Gib die IP-Adresse des Servers ein: ")  # ÄNDERN: IP des Servers
 PORT = 12345
+
+SIEGE_DATEI = "siege.txt"
+
+def lade_siege():
+    if not os.path.exists(SIEGE_DATEI):
+        return {"Server": 0, "Client": 0}
+    with open(SIEGE_DATEI, "r") as f:
+        inhalt = f.read().splitlines()
+    siege = {"Server": 0, "Client": 0}
+    for i in range(0, len(inhalt), 2):
+        if i+1 < len(inhalt):
+            name = inhalt[i].replace(":", "")
+            anzahl = int(inhalt[i+1])
+            siege[name] = anzahl
+    return siege
+
+def speichere_sieg(gewinner):  # "Server" oder "Client"
+    siege = lade_siege()
+    siege[gewinner] += 1
+    with open(SIEGE_DATEI, "w") as f:
+        f.write(f"Server:\n{siege['Server']}\nClient:\n{siege['Client']}\n")
 
 class NetzwerkSpiel(VierGewinntGUI):
     def __init__(self, root, verbindung, ist_server=False):
@@ -25,8 +47,22 @@ class NetzwerkSpiel(VierGewinntGUI):
             return
         if self.feld[0][spalte] != " ":
             return
+
+        vorheriger_status = [reihe[:] for reihe in self.feld]  # Spielfeld vorher kopieren
         super().chip_setzen(spalte)
-        self.verbindung.sendall(str(spalte).encode())
+
+        if not self.spiel_aktiv and vorheriger_status != self.feld:
+            if self.ist_server:
+                gewinner = "Client" 
+            else:
+                gewinner = "Server"
+            speichere_sieg(gewinner)
+
+        try:
+            self.verbindung.sendall(str(spalte).encode())
+        except:
+            pass
+
         self.dran = False
 
     def empfange_nachrichten(self):
@@ -45,7 +81,16 @@ class NetzwerkSpiel(VierGewinntGUI):
                 break
 
     def netzwerk_zug(self, spalte):
+        vorheriger_status = [reihe[:] for reihe in self.feld]
         super().chip_setzen(spalte)
+
+        if not self.spiel_aktiv and vorheriger_status != self.feld:
+            if self.ist_server:
+                gewinner = "Client"
+            else:
+                gewinner = "Server"
+            speichere_sieg(gewinner)
+
         self.dran = True
 
     def sende_neustart(self):
