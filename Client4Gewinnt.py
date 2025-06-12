@@ -7,7 +7,7 @@ import os
 SERVER_IP = input("Gib die IP-Adresse des Servers ein: ")  # ÄNDERN: IP des Servers
 PORT = 12345
 
-SIEGE_DATEI = "siege.txt"
+SIEGE_DATEI = "siege_Client.txt"
 
 def lade_siege():
     if not os.path.exists(SIEGE_DATEI):
