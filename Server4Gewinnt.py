@@ -7,7 +7,7 @@ import os
 HOST = ''  # Server akzeptiert Verbindungen von überall
 PORT = 12345
 
-SIEGE_DATEI = "siege.txt"
+SIEGE_DATEI = "siege_Server.txt"
 
 def lade_siege():
     if not os.path.exists(SIEGE_DATEI):
