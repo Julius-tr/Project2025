@@ -1,165 +1,147 @@
-'''
-Dies ist ein Code für das Spielfeld von 4 Gewinnt, welches mit den Codes Client4Gewinnt und Server4Gewinnt per sockets spielbar ist.
-Creators:
-    Julia
-    Matteo
-Prüfstelle:
-    HTL-Anichstrasse
-'''
+# Import der benötigten Module
+import socket             # Ermöglicht Netzwerkverbindungen (TCP/IP)
+import threading          # Ermöglicht paralleles Ausführen von Code (für Nachrichtenaustausch)
+import tkinter as tk      # Modul für die grafische Benutzeroberfläche
+from Code4Gewinnt import VierGewinntGUI  # Importiert die Spielfeld- und Spiel-Logik
+import os                 # Modul zur Arbeit mit dem Dateisystem (Dateiprüfung etc.)
 
-import tkinter as tk  # Importiere das GUI-Modul
+# Server-IP: leerer String akzeptiert Verbindungen von jeder IP-Adresse
+HOST = ''
+PORT = 12345  # Fester Port, auf dem der Server lauscht
 
-# Konstanten für das Spielfeld
-REIHEN = 6                     # Anzahl der Zeilen im Spielfeld
-SPALTEN = 7                    # Anzahl der Spalten im Spielfeld
-ZELL_GROESSE = 60              # Größe jeder Zelle in Pixel
+# Dateiname, in dem die Siege gespeichert werden
+SIEGE_DATEI = "siege_Server.txt"
 
-# Farbcodes für die Spielerchips und leere Zellen
-FARBEN = {"X": "#f13914", "O": "#e6e51d", " ": "#f1f1f1"}  # Rot, Gelb, Weiß
-NAMEN = {"X": "Rot", "O": "Gelb"}  # Spielername zur Anzeige
+# Funktion zum Laden der Siege aus der Datei
+def lade_siege():
+    # Wenn Datei nicht existiert, Standard-Sieganzahl zurückgeben
+    if not os.path.exists(SIEGE_DATEI):
+        return {"Server": 0, "Client": 0}
+    # Datei zeilenweise lesen
+    with open(SIEGE_DATEI, "r") as f:
+        inhalt = f.read().splitlines()
+    siege = {"Server": 0, "Client": 0}
+    # Je zwei Zeilen pro Spieler (Name + Anzahl)
+    for i in range(0, len(inhalt), 2):
+        if i+1 < len(inhalt):
+            name = inhalt[i].replace(":", "")  # Entferne ":" nach dem Namen
+            anzahl = int(inhalt[i+1])          # Konvertiere Sieganzahl zu int
+            siege[name] = anzahl               # Speichere im Dictionary
+    return siege
 
-# GUI-Klasse für 4 Gewinnt
-class VierGewinntGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("4 Gewinnt – Julia & Matteo")  # Fenstertitel setzen
+# Funktion zum Speichern eines Sieges für den angegebenen Gewinner
+def speichere_sieg(gewinner):  # erwartet "Server" oder "Client"
+    siege = lade_siege()        # Lade aktuelle Statistik
+    siege[gewinner] += 1        # Erhöhe Sieganzahl des Gewinners
+    # Schreibe aktualisierte Werte in die Datei
+    with open(SIEGE_DATEI, "w") as f:
+        f.write(f"Server:\n{siege['Server']}\nClient:\n{siege['Client']}\n")
 
-        # Button zum Neustarten des Spiels
-        self.reset_button = tk.Button(root, text="Spiel Neustarten", command=self.spiel_neustarten)
-        self.reset_button.grid(row=2, column=0, columnspan=SPALTEN, pady=10)
+# Klasse für das Netzwerkspiel, erweitert die grafische Spieloberfläche
+class NetzwerkSpiel(VierGewinntGUI):
+    def __init__(self, root, verbindung, ist_server=False):
+        super().__init__(root)  # Initialisiere die GUI von der Basisklasse
+        self.verbindung = verbindung
+        self.ist_server = ist_server
+        # Setze Fenster-Titel abhängig davon, ob es Server oder Client ist
+        self.root.title("4 Gewinnt – " + ("Server (Rot)" if ist_server else "Client (Gelb)"))
+        self.spieler = "X" if ist_server else "O"  # Server ist Rot (X), Client ist Gelb (O)
+        self.dran = ist_server  # Server beginnt mit dem ersten Zug
 
-        # 2D-Liste zur Darstellung des Spielfelds (initial leer)
-        self.feld = [[" " for _ in range(SPALTEN)] for _ in range(REIHEN)]
+        # Starte einen neuen Thread, der eingehende Nachrichten vom Netzwerk empfängt
+        threading.Thread(target=self.empfange_nachrichten, daemon=True).start()
 
-        self.spieler = "X"         # Startspieler ist "X" (Rot)
-        self.spiel_aktiv = True    # Spiel ist aktiv (nicht vorbei)
+        # Weise dem Reset-Button eine eigene Funktion zu (auch Netzwerk-Reset)
+        self.reset_button.config(command=self.sende_neustart)
 
-        # Erstelle das Spielfeld-Canvas (Zeichenbereich)
-        self.canvas = tk.Canvas(root, width=SPALTEN * ZELL_GROESSE, height=REIHEN * ZELL_GROESSE, bg="#1207c1")
-        self.canvas.grid(row=1, column=0, columnspan=SPALTEN)
-
-        self.buttons = []  # Liste für die Steine-Setz-Buttons (oben)
-
-        # Erstelle Buttons für jede Spalte
-        for spalte in range(SPALTEN):
-            btn = tk.Button(root, text=str(spalte + 1), width=4, command=lambda s=spalte: self.chip_setzen(s))
-            btn.grid(row=0, column=spalte, padx=2, pady=4)
-
-            # Hovereffekt: wenn Maus über Button → "O" anzeigen, sonst Spaltennummer
-            btn.bind("<Enter>", lambda e, s=spalte: self.hover_begin(e, s))
-            btn.bind("<Leave>", lambda e, s=spalte: self.hover_ende(e, s))
-
-            self.buttons.append(btn)
-
-        self.zeichne_feld()       # Zeichne das leere Spielfeld
-        self.status_text_id = None  # Für spätere Statusanzeige im Canvas
-
-    # Hover-Effekt starten: Chip-Vorschau anzeigen
-    def hover_begin(self, event, spalte):
-        if self.spiel_aktiv and self.feld[0][spalte] == " ":
-            event.widget.config(text="O", fg="black", font=("Arial", 10, "bold"), bg=FARBEN[self.spieler])
-
-    # Hover-Effekt beenden: Button auf ursprüngliche Anzeige zurücksetzen
-    def hover_ende(self, event, spalte):
-        if self.spiel_aktiv:
-            event.widget.config(text=str(spalte + 1), fg="black", font=("Arial", 10), bg="SystemButtonFace")
-
-    # Status-Text (Sieg/Unentschieden) in der Mitte des Canvas anzeigen
-    def zeige_status_text(self, text, farbe="black"):
-        if self.status_text_id:
-            self.canvas.delete(self.status_text_id)  # Vorherigen Text entfernen
-
-        # Position für die Anzeige (zentriert im Spielfeld)
-        x = (SPALTEN * ZELL_GROESSE) // 2
-        y = (REIHEN * ZELL_GROESSE) // 2
-
-        # Hintergrund-Rechteck
-        self.canvas.create_rectangle(x - 160, y - 40, x + 160, y + 40, fill="white", outline="black", width=3)
-
-        # Text selbst
-        self.status_text_id = self.canvas.create_text(x, y, text=text, fill=farbe, font=("Arial", 24, "bold"))
-
-    # Zeichnet alle Chips auf dem Canvas entsprechend dem Spielfeldzustand
-    def zeichne_feld(self):
-        self.canvas.delete("all")  # Canvas leeren
-        for zeile in range(REIHEN):
-            for spalte in range(SPALTEN):
-                x1 = spalte * ZELL_GROESSE + 5
-                y1 = zeile * ZELL_GROESSE + 5
-                x2 = x1 + ZELL_GROESSE - 10
-                y2 = y1 + ZELL_GROESSE - 10
-                farbe = FARBEN[self.feld[zeile][spalte]]
-                self.canvas.create_oval(x1, y1, x2, y2, fill=farbe, outline="black")
-
-    # Setzt das Spielfeld zurück und beginnt ein neues Spiel
-    def spiel_neustarten(self):
-        self.feld = [[" " for _ in range(SPALTEN)] for _ in range(REIHEN)]
-        self.spieler = "X"
-        self.spiel_aktiv = True
-        self.zeichne_feld()
-
-    # Setzt einen Chip in die gewünschte Spalte
+    # Wenn Spieler einen Chip setzen möchte
     def chip_setzen(self, spalte):
-        if not self.spiel_aktiv:
+        # Abbrechen, wenn nicht an der Reihe oder Spiel inaktiv
+        if not self.dran or not self.spiel_aktiv:
+            return
+        # Abbrechen, wenn oberste Zelle der Spalte belegt ist (Spalte voll)
+        if self.feld[0][spalte] != " ":
             return
 
-        gesetzt = False
-        for zeile in reversed(range(REIHEN)):  # Von unten nach oben suchen
-            if self.feld[zeile][spalte] == " ":
-                self.feld[zeile][spalte] = self.spieler
-                self.zeichne_feld()
-                gesetzt = True
+        # Kopiere aktuellen Spielfeld-Zustand vor dem Zug
+        vorheriger_status = [reihe[:] for reihe in self.feld]
+        super().chip_setzen(spalte)  # Führe Chip-Setzen durch (GUI und Logik)
 
-                # Gewinn prüfen
-                if self.pruefe_gewinner(zeile, spalte):
-                    self.canvas.create_text(
-                        (SPALTEN * ZELL_GROESSE) // 2,
-                        (REIHEN * ZELL_GROESSE) // 2,
-                        text=f"Spieler {NAMEN[self.spieler]} \n gewinnt!",
-                        font=("Arial", 32, "bold"), fill="green"
-                    )
-                    self.spiel_aktiv = False
-                    return
+        # Wenn das Spiel nach dem Zug vorbei ist (Sieg) und sich das Feld verändert hat
+        if not self.spiel_aktiv and vorheriger_status != self.feld:
+            if self.dran:
+                gewinner = "Server"
+            else:
+                gewinner = "Client"
+            speichere_sieg(gewinner)  # Sieg speichern
 
-                # Unentschieden prüfen
-                elif self.spielfeld_voll():
-                    self.canvas.create_text(
-                        (SPALTEN * ZELL_GROESSE) // 2,
-                        (REIHEN * ZELL_GROESSE) // 2,
-                        text="Unentschieden!",
-                        font=("Arial", 24), fill="white"
-                    )
-                    self.spiel_aktiv = False
-                    return
+        # Sende den gespielten Zug (Spaltennummer) an den Client
+        try:
+            self.verbindung.sendall(str(spalte).encode())
+        except:
+            pass  # Sende-Fehler ignorieren (z. B. Verbindung verloren)
 
-                # Spieler wechseln
+        self.dran = False  # Gegner ist nun an der Reihe
+
+    # Funktion, die permanent Nachrichten vom Client empfängt
+    def empfange_nachrichten(self):
+        while True:
+            try:
+                daten = self.verbindung.recv(1024)  # Empfange bis zu 1024 Bytes
+                if not daten:
+                    break  # Wenn keine Daten mehr ankommen, Verbindung beendet
+                nachricht = daten.decode()  # Dekodiere empfangene Nachricht
+                if nachricht == "RESET":
+                    # Starte das Spiel im GUI-Thread neu
+                    self.root.after(0, self.spiel_neustarten)
                 else:
-                    self.spieler = "O" if self.spieler == "X" else "X"
-                return
+                    # Empfange Zug (Spaltennummer) und spiele ihn im GUI-Thread
+                    spalte = int(nachricht)
+                    self.root.after(0, lambda: self.netzwerk_zug(spalte))
+            except:
+                break  # Fehler beim Empfang oder Verbindung verloren
 
-        print("Spalte voll!")  # Falls kein Chip gesetzt werden konnte
+    # Wird aufgerufen, wenn der Gegner (Client) einen Chip setzt
+    def netzwerk_zug(self, spalte):
+        vorheriger_status = [reihe[:] for reihe in self.feld]
+        super().chip_setzen(spalte)  # Führe den gegnerischen Zug aus
 
-    # Prüft, ob das Spielfeld voll ist (für Unentschieden)
-    def spielfeld_voll(self):
-        return all(self.feld[0][spalte] != " " for spalte in range(SPALTEN))
+        # Wenn das Spiel nach dem gegnerischen Zug vorbei ist
+        if not self.spiel_aktiv and vorheriger_status != self.feld:
+            if self.dran:
+                gewinner = "Server"
+            else:
+                gewinner = "Client"
+            speichere_sieg(gewinner)  # Sieg speichern
 
-    # Prüft, ob der letzte gesetzte Chip zu einem Sieg geführt hat
-    def pruefe_gewinner(self, zeile, spalte):
-        # Funktion zählt gleiche Chips in eine Richtung
-        def zaehle_richtung(dz, ds):
-            count = 0
-            z, s = zeile + dz, spalte + ds
-            while 0 <= z < REIHEN and 0 <= s < SPALTEN and self.feld[z][s] == self.spieler:
-                count += 1
-                z += dz
-                s += ds
-            return count
+        self.dran = True  # Spieler ist wieder dran
 
-        # Richtungen: horizontal, vertikal, diagonal ↘, diagonal ↙
-        richtungen = [(0, 1), (1, 0), (1, 1), (1, -1)]
-        for dz, ds in richtungen:
-            count = 1 + zaehle_richtung(dz, ds) + zaehle_richtung(-dz, -ds)
-            if count >= 4:
-                return True  # Sieger gefunden
-        return False  # Kein Sieg
+    # Sende einen "RESET"-Befehl an den Gegner und starte lokal neu
+    def sende_neustart(self):
+        self.spiel_neustarten()  # Lokales Zurücksetzen
+        try:
+            self.verbindung.sendall("RESET".encode())  # Sende RESET an Client
+        except:
+            pass  # Fehler beim Senden ignorieren
+
+# === Hauptteil: Server starten und GUI starten ===
+
+# Erstelle einen TCP/IP-Socket
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# Binde den Socket an die IP-Adresse und den Port
+server_socket.bind((HOST, PORT))
+
+# Warte auf genau eine eingehende Verbindung
+server_socket.listen(1)
+print("Warte auf Verbindung...")
+
+# Sobald ein Client sich verbindet, akzeptiere die Verbindung
+verbindung, adresse = server_socket.accept()
+print(f"Verbunden mit {adresse}")
+
+# Starte die grafische Benutzeroberfläche (GUI)
+fenster = tk.Tk()
+spiel = NetzwerkSpiel(fenster, verbindung, ist_server=True)  # Erstelle ein Spielobjekt für den Server
+fenster.mainloop()  # Starte die Ereignisschleife (GUI bleibt offen)
 
