@@ -52,7 +52,7 @@ class NetzwerkSpiel(VierGewinntGUI):
         super().chip_setzen(spalte)
 
         if not self.spiel_aktiv and vorheriger_status != self.feld:
-            if self.ist_server:
+            if self.dran:
                 gewinner = "Server" 
             else:
                 gewinner = "Client"
@@ -85,7 +85,7 @@ class NetzwerkSpiel(VierGewinntGUI):
         super().chip_setzen(spalte)
 
         if not self.spiel_aktiv and vorheriger_status != self.feld:
-            if self.ist_server:
+            if self.dran:
                 gewinner = "Server"
             else:
                 gewinner = "Client"
